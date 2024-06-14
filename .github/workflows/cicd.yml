@@ -43,8 +43,8 @@ jobs:
         if: success() || failure()
         with:
           ketryx-url: ${{ vars.KETRYX_URL }}
-          project: ${{ vars.KETRYX_PROJECT }}
-          api-key: ${{ secrets.KETRYX_API_KEY }}
+          project: ${{ vars.DISCOVERY_KETRYX_PROJECT }}
+          api-key: ${{ secrets.DISCOVERY_KETRYX_API_KEY }}
           commit-sha: ${{ github.event.pull_request.head.sha || github.sha }}
           build-name: ci-js
           test-junit-path: js-src/test-results/jest-junit.xml
