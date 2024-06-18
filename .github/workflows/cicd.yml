@@ -81,7 +81,7 @@ jobs:
         if: success() || failure()
         with:
           ketryx-url: ${{ vars.KETRYX_URL }}
-          project: ${{ vars.DISCOVERY_KETRYX_PROJECT }}
+          project: ${{ vars.DISCOVERY_IDS_KETRYX_PROJECT }}
           api-key: ${{ secrets.DISCOVERY_KETRYX_API_KEY }}
           commit-sha: ${{ github.event.pull_request.head.sha || github.sha }}
           build-name: ci-java
@@ -103,7 +103,7 @@ jobs:
         if: success() || failure()
         with:
           ketryx-url: ${{ vars.KETRYX_URL }}
-          project: ${{ vars.DISCOVERY_KETRYX_PROJECT }}
+          project: ${{ vars.DISCOVERY_IDS_KETRYX_PROJECT }}
           api-key: ${{ secrets.DISCOVERY_KETRYX_API_KEY }}
           commit-sha: ${{ github.event.pull_request.head.sha || github.sha }}
           build-name: ci-sbom
@@ -121,7 +121,7 @@ jobs:
         if: success() || failure()
         with:
           ketryx-url: ${{ vars.KETRYX_URL }}
-          project: ${{ vars.DISCOVERY_KETRYX_PROJECT }}
+          project: ${{ vars.DISCOVERY_IDS_KETRYX_PROJECT }}
           api-key: ${{ secrets.DISCOVERY_KETRYX_API_KEY }}
           commit-sha: ${{ github.event.pull_request.head.sha || github.sha }}
           build-name: check-pr
