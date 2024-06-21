@@ -87,6 +87,58 @@ jobs:
           build-name: ci-java
           test-junit-path: java-src/build/test-results/test/*.xml
 
+  test-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache APT packages
+        id: cache-apt
+        uses: actions/cache@v3
+        with:
+          path: /var/cache/apt
+          key: ${{ runner.os }}-apt-cache
+          restore-keys: |
+            ${{ runner.os }}-apt-cache
+      - name: Cache APT lists
+        id: cache-apt-lists
+        uses: actions/cache@v3
+        with:
+          path: /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-lists
+          restore-keys: |
+            ${{ runner.os }}-apt-lists
+      - name: Install cmake
+        run: sudo apt update && sudo apt install cmake -y
+      - name: Use cmake
+        run: cmake --version
+      - name: Run C++ unit tests
+        working-directory: cpp-src
+        run: |
+          mkdir build -p
+          cd build
+          cmake ..
+          cmake --build .
+          ./cpp_sorter_test --gtest_output=xml
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: test-results-cpp
+          path: cpp-src/build/*.xml
+          retention-days: 7
+          if-no-files-found: error
+      - name: Report C++ build to Ketryx
+        uses: Ketryx/ketryx-github-action@v1
+        if: success() || failure()
+        with:
+          ketryx-url: ${{ vars.KETRYX_URL }}
+          project: ${{ vars.KETRYX_PROJECT }}
+          api-key: ${{ secrets.KETRYX_API_KEY }}
+          commit-sha: ${{ github.event.pull_request.head.sha || github.sha }}
+          build-name: ci-cpp
+          test-junit-path: cpp-src/build/*.xml
+
   create-sbom:
     runs-on: ubuntu-latest
     steps:
