@@ -1,7 +1,7 @@
-Feature: Sensor module
+Feature: Sensor Warning module
 
-  @implements:test-sensor-module
-  Scenario: Test Sensor Module (Cucumber)
+  @tests:spec-sensor-reading-warning
+  Scenario: Test Sensor Reading Warning (Cucumber)
     Given Application is open
     When Data of 8 is entered
     And Form is submitted

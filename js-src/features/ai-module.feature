@@ -1,7 +1,7 @@
-Feature: Sensor module
+Feature: AI module
 
-  @implements:test-sensor-module
-  Scenario: Test Sensor Module (Cucumber)
+  @tests:spec-ai-module
+  Scenario: Test AI Module (Cucumber)
     Given Application is open
     When Data of 8 is entered
     And Form is submitted
