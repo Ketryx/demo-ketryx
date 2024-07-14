@@ -1,7 +1,7 @@
-Feature: Sensor module
+Feature: Model
 
-  @tests:test-sensor-module
-  Scenario: Test Sensor Module (Cucumber)
+  @tests:spec-model
+  Scenario: Test Model
     Given Application is open
     When Data of 8 is entered
     And Form is submitted
