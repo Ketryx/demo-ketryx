@@ -1,7 +1,7 @@
 Feature: Model
 
   @tests:spec-model
-  Scenario: Test Model
+  Scenario: Test Model Drift
     Given Application is open
     When Data of 8 is entered
     And Form is submitted
