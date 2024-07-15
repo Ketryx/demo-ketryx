@@ -1,7 +1,7 @@
 Feature: Data module
 
   @tests:spec-data
-  Scenario: Test Data
+  Scenario: Test Model Drift
     Given Application is open
     When Data of 8 is entered
     And Form is submitted
