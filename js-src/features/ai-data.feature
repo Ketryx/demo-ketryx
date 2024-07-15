@@ -1,7 +1,7 @@
 Feature: Data module
 
   @tests:spec-data
-  Scenario: Test Model Drift
+  Scenario: Bias Detection
     Given Application is open
     When Data of 8 is entered
     And Form is submitted
