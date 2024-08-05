@@ -19,7 +19,7 @@ When('Form is submitted',
 );
 
 Then('Sensor {string} is not read',
-  async function (this) {
+  async function (string) {
   },
 );
 
