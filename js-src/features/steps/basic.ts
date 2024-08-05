@@ -18,7 +18,7 @@ When('Form is submitted',
   },
 );
 
-Then('Sensor is not read',
+Then('Sensor {string} is not read',
   async function (this) {
   },
 );
