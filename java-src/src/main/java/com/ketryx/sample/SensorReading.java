@@ -3,7 +3,7 @@ package com.ketryx.sample;
 /**
  * Utility class to read sensor.
  *
- * @itemId:SensorReading
+ * @itemId:SensorReadingDS
  * @itemTitle:"Sensor Reading (Java)"
  * @itemHasParent:spec-sensor-module
  * @itemFulfills:CS-1,KD-20
