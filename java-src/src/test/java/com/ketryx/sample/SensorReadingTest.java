@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class SensorReadingTest {
     /**
      * Tests that sensor is read correctly.
-     * @tests:SensorReading
+     * @tests:SensorReadingDS
      * @itemTitle:"Test Sensor Reading (Java)"
      */
     @Test
