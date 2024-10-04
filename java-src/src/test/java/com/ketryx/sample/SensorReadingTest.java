@@ -24,10 +24,7 @@ public class SensorReadingTest {
         assertEquals(3, SensorReading.readSensor(1, 2));
     }
 
-    /**
-     * @itemTitle:"Test Mouse Reading (Java)" @tests:KD-32
-     * @tests:KXITM1X5BNE4ACT9T6A8MC2ACQA6NPD
-     */
+    // @tests:KD-1
     @Test
     void createMouse() {
         assertEquals(3, SensorReading.readSensor(1, 2));
