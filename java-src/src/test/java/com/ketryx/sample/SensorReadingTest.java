@@ -18,16 +18,15 @@ public class SensorReadingTest {
 
     // @itemTitle:"Test Peripheral Reading (Java)"
     // @tests:KXITM1X5BNE4ACT9T6A8MC2ACQA6NPD
-    @Test
     @DisplayName("Should return")
+    @Test
     void createPeripheral() {
         assertEquals(3, SensorReading.readSensor(1, 2));
     }
 
     /**
      * @itemTitle:"Test Mouse Reading (Java)" @tests:KD-32
-     * @tests:KD-8
-     * @tests:KD-33
+     * @tests:KXITM1X5BNE4ACT9T6A8MC2ACQA6NPD
      */
     @Test
     void createMouse() {
