@@ -32,7 +32,7 @@ public class SensorReadingTest {
      */
     @Test
     @DisplayName("Should return")
-    void createPeripheral() {
+    void createMouse() {
         assertEquals(3, SensorReading.readSensor(1, 2));
     }
 }
