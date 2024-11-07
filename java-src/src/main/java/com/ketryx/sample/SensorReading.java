@@ -1,12 +1,12 @@
 package com.ketryx.sample;
 
 /**
- * Utility class to read sensor.
+ * A module that calculates and displays risk scores for coronary events based on model predictions.
  *
  * @itemId:SensorReading
- * @itemTitle:"Sensor Reading (Java)"
+ * @itemTitle:"Risk Scoring Module (Java)"
  * @itemHasParent:spec-sensor-module
- * @itemFulfills:CS-1,KD-20
+ * @itemFulfills:KD-26, KD-20
  */
 public class SensorReading {
     public static int readSensor(int a, int b) {
