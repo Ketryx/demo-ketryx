@@ -6,9 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SensorReadingTest {
     /**
-     * Tests that sensor is read correctly.
-     * @tests:SensorReading
-     * @itemTitle:"Test Sensor Reading (Java)"
+     * Validates that the Risk Scoring Module accurately calculates risk scores for coronary events based on patient data.
+     * @tests:SensorReading, KD-26
+     * @itemTitle:"Risk Scoring Module Validation (Java)"
      */
     @Test
     public void sensorReadingTest() {
