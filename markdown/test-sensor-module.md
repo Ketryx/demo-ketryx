@@ -1,7 +1,7 @@
 ---
 itemId: test-sensor-module
 itemType: Test Case
-itemTests: spec-sensor-module
+itemTests: spec-sensor-module, KD-12, KD-26
 ---
 
 # Blockage Detection Module Accuracy Test (Markdown)
