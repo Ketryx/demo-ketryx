@@ -4,7 +4,7 @@
  * @itemId:spec-model
  * @itemTitle:"Model (Javascript)"
  * @itemFulfills:CS-1,KD-20, 
- * @itemHasParent:KP-4156
+ * @itemHasParent:KD-4156
  */
 export function createModel() {
 }
