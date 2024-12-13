@@ -1,7 +1,7 @@
 Feature: Data module
 
   @tests:spec-data
-  Scenario: Bias Detection
+  Scenario: Train-test contamination checks
     Given Application is open
     When Data of 8 is entered
     And Form is submitted
