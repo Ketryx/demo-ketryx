@@ -23,6 +23,11 @@ Then('Sensor {string} is not read',
   },
 );
 
+Then('Sensor is not read',
+  async function (string) {
+  },
+);
+
 Then('An error message is shown',
   async function (this) {
   },
