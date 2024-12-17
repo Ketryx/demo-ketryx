@@ -7,4 +7,4 @@ itemHasParent: spec-ai-subsystem,KD-2
 
 # Blockage Detection Module (Markdown)
 
-A module that uses machine learning to identify blockages within coronary arteries.
+A module that uses machine learning to identify blockages within coronary arteries with increased sensitivity.
