@@ -5,10 +5,10 @@ Feature: Sensor module
     Given Application is open
     When Data of 8 is entered
     And Form is submitted
-    Then Sensor "<Fields>" is not read
+    Then Sensor "<Sensors>" is not read
     And An error message is shown
 
     Examples:
-      | Fields      |
+      | Sensors     |
       | Primary     |
       | Secondary   |
