@@ -11,3 +11,4 @@ Feature: Sensor module
     Examples:
       | Fields      |
       | Primary     |
+      | Secondary   |
