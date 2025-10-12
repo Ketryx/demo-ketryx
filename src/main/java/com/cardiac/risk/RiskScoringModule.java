@@ -1,230 +1,249 @@
 ```java
 package com.cardiac.risk;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.stereotype.Service;
-import org.springframework.util.Assert;
-
+import java.util.Map;
 import java.util.Objects;
 
-@Service
+/**
+ * RiskScoringModule provides functionality to calculate and display risk scores for coronary events.
+ * It integrates blockage data, patient info, and predictive model outputs to compute risk scores
+ * with confidence intervals and stratify risk into categories.
+ */
 public class RiskScoringModule {
 
-    private static final Logger logger = LoggerFactory.getLogger(RiskScoringModule.class);
-
-    public enum Severity {
-        LOW,
-        MEDIUM,
-        HIGH,
-        CRITICAL
+    /**
+     * Represents the severity level of the risk score.
+     */
+    public enum SeverityLevel {
+        LOW, MEDIUM, HIGH
     }
 
     /**
-     * Calculates the coronary event risk score based on patient data and blockage prediction.
-     *
-     * @param patientData      Data related to the patient demographics and medical history
-     * @param blockagePercent  Predicted blockage severity as percentage (0-100)
-     * @return normalized risk score (0-100) and severity classification
+     * Data model for risk score, encapsulating score value, severity, and confidence interval.
      */
-    @Cacheable(value = "riskScores", key = "#patientData.cacheKey() + '-' + #blockagePercent")
-    public RiskResult calculateRiskScore(PatientData patientData, double blockagePercent) {
-        logger.info("Starting risk score calculation for patientId={} with blockagePercent={}",
-                patientData.getPatientId(), blockagePercent);
+    public static class RiskScore {
+        private final double score;
+        private final SeverityLevel severityLevel;
+        private final double confidenceLowerBound;
+        private final double confidenceUpperBound;
 
-        try {
-            validateInputs(patientData, blockagePercent);
-
-            double rawScore = computeRawRiskScore(patientData, blockagePercent);
-            double normalizedScore = normalizeScore(rawScore);
-
-            Severity severity = classifySeverity(normalizedScore);
-
-            logger.info("Risk score calculation completed for patientId={}. RawScore={}, NormalizedScore={}, Severity={}",
-                    patientData.getPatientId(), rawScore, normalizedScore, severity.name());
-
-            return new RiskResult(normalizedScore, severity);
-        } catch (IllegalArgumentException e) {
-            logger.error("Invalid input for risk score calculation: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("Unexpected error during risk score calculation for patientId={}", patientData.getPatientId(), e);
-            throw new RiskCalculationException("Failed to calculate risk score", e);
-        }
-    }
-
-    private void validateInputs(PatientData patientData, double blockagePercent) {
-        Assert.notNull(patientData, "Patient data must not be null");
-        Assert.isTrue(blockagePercent >= 0 && blockagePercent <= 100, "Blockage percent must be between 0 and 100");
-        Assert.isTrue(patientData.getAge() > 0 && patientData.getAge() < 150, "Age must be in realistic range");
-    }
-
-    /**
-     * Multi-factor scoring incorporating age, medical history factors, and blockage severity.
-     * The formula is weighted and follows a medically validated heuristic:
-     *
-     * rawScore = (ageFactor + historyFactor + blockageFactor) capped at 100
-     *
-     * ageFactor = weighted linear increase with age after 40
-     * historyFactor = sum of medical conditions weight
-     * blockageFactor = severity directly weighted
-     */
-    private double computeRawRiskScore(PatientData patientData, double blockagePercent) {
-        double ageFactor = computeAgeFactor(patientData.getAge());
-        double historyFactor = computeHistoryFactor(patientData);
-        double blockageFactor = blockagePercent * 0.6; // heavier weight to blockage severity
-
-        double totalScore = ageFactor + historyFactor + blockageFactor;
-
-        logger.debug("Intermediate factors for patientId={}: ageFactor={}, historyFactor={}, blockageFactor={}, totalScore={}",
-                patientData.getPatientId(), ageFactor, historyFactor, blockageFactor, totalScore);
-
-        return Math.min(totalScore, 100);
-    }
-
-    private double computeAgeFactor(int age) {
-        if (age < 40) return 0;
-        // linear increase from age 40 to 80, max 20 points
-        double factor = ((double) (age - 40) / 40.0) * 20;
-        return Math.min(factor, 20);
-    }
-
-    private double computeHistoryFactor(PatientData patientData) {
-        double factor = 0;
-        if (patientData.isHistoryOfHypertension()) factor += 10;
-        if (patientData.isHistoryOfDiabetes()) factor += 12;
-        if (patientData.isHistoryOfSmoking()) factor += 15;
-        if (patientData.isHistoryOfFamilyCoronaryDisease()) factor += 18;
-        return Math.min(factor, 40);
-    }
-
-    private double normalizeScore(double rawScore) {
-        // Already capped at 100, ensure lower bound zero
-        double normalized = Math.max(0, Math.min(rawScore, 100));
-        logger.debug("Normalized score: {}", normalized);
-        return normalized;
-    }
-
-    private Severity classifySeverity(double normalizedScore) {
-        if (normalizedScore < 25) return Severity.LOW;
-        if (normalizedScore < 50) return Severity.MEDIUM;
-        if (normalizedScore < 75) return Severity.HIGH;
-        return Severity.CRITICAL;
-    }
-
-    public static class RiskResult {
-        private final double riskScore;
-        private final Severity severity;
-
-        public RiskResult(double riskScore, Severity severity) {
-            this.riskScore = riskScore;
-            this.severity = severity;
+        /**
+         * Constructs a RiskScore instance.
+         *
+         * @param score                 the calculated risk score
+         * @param severityLevel         the severity level of the risk
+         * @param confidenceLowerBound  lower bound of the confidence interval
+         * @param confidenceUpperBound  upper bound of the confidence interval
+         */
+        public RiskScore(double score, SeverityLevel severityLevel, double confidenceLowerBound, double confidenceUpperBound) {
+            this.score = score;
+            this.severityLevel = severityLevel;
+            this.confidenceLowerBound = confidenceLowerBound;
+            this.confidenceUpperBound = confidenceUpperBound;
         }
 
-        public double getRiskScore() {
-            return riskScore;
+        public double getScore() {
+            return score;
         }
 
-        public Severity getSeverity() {
-            return severity;
+        public SeverityLevel getSeverityLevel() {
+            return severityLevel;
+        }
+
+        public double getConfidenceLowerBound() {
+            return confidenceLowerBound;
+        }
+
+        public double getConfidenceUpperBound() {
+            return confidenceUpperBound;
         }
 
         @Override
         public String toString() {
-            return "RiskResult{" +
-                    "riskScore=" + riskScore +
-                    ", severity=" + severity +
-                    '}';
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof RiskResult)) return false;
-            RiskResult that = (RiskResult) o;
-            return Double.compare(that.riskScore, riskScore) == 0 && severity == that.severity;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(riskScore, severity);
+            return String.format("RiskScore{score=%.3f, severity=%s, confidenceInterval=[%.3f, %.3f]}",
+                    score, severityLevel, confidenceLowerBound, confidenceUpperBound);
         }
     }
 
-    public static class RiskCalculationException extends RuntimeException {
-        public RiskCalculationException(String message, Throwable cause) {
+    /**
+     * Exception thrown when input data to risk scoring is invalid.
+     */
+    public static class RiskScoringException extends Exception {
+        public RiskScoringException(String message) {
+            super(message);
+        }
+
+        public RiskScoringException(String message, Throwable cause) {
             super(message, cause);
         }
     }
 
-    public static class PatientData {
-        private final String patientId;
-        private final int age;
-        private final boolean historyOfHypertension;
-        private final boolean historyOfDiabetes;
-        private final boolean historyOfSmoking;
-        private final boolean historyOfFamilyCoronaryDisease;
+    /**
+     * Calculates the risk score for coronary events.
+     *
+     * @param blockageData        Map<String, Double> representing artery names and percent blockage (0-100)
+     * @param patientInfo         Map<String, Object> containing patient attributes (e.g., age, sex, smoking status)
+     * @param predictiveModelOutput Map<String, Double> outputs from predictive models (e.g. probability scores)
+     * @return RiskScore with score, severity level, and confidence interval
+     * @throws RiskScoringException if inputs are invalid or calculation fails
+     */
+    public RiskScore calculateRiskScore(Map<String, Double> blockageData,
+                                        Map<String, Object> patientInfo,
+                                        Map<String, Double> predictiveModelOutput) throws RiskScoringException {
+        try {
+            validateInputs(blockageData, patientInfo, predictiveModelOutput);
 
-        public PatientData(String patientId,
-                           int age,
-                           boolean historyOfHypertension,
-                           boolean historyOfDiabetes,
-                           boolean historyOfSmoking,
-                           boolean historyOfFamilyCoronaryDisease) {
-            this.patientId = patientId;
-            this.age = age;
-            this.historyOfHypertension = historyOfHypertension;
-            this.historyOfDiabetes = historyOfDiabetes;
-            this.historyOfSmoking = historyOfSmoking;
-            this.historyOfFamilyCoronaryDisease = historyOfFamilyCoronaryDisease;
+            double blockageFactor = computeBlockageFactor(blockageData);
+            double patientFactor = computePatientFactor(patientInfo);
+            double modelFactor = aggregatePredictiveModelOutput(predictiveModelOutput);
+
+            double rawScore = blockageFactor * 0.5 + patientFactor * 0.3 + modelFactor * 0.2;
+            double normalizedScore = normalizeScore(rawScore);
+
+            double marginOfError = computeMarginOfError(blockageData, patientInfo, predictiveModelOutput);
+            double lowerBound = Math.max(0.0, normalizedScore - marginOfError);
+            double upperBound = Math.min(1.0, normalizedScore + marginOfError);
+
+            SeverityLevel severity = stratifyRisk(normalizedScore);
+
+            return new RiskScore(normalizedScore, severity, lowerBound, upperBound);
+        } catch (Exception e) {
+            throw new RiskScoringException("Failed to calculate risk score", e);
         }
+    }
 
-        public String getPatientId() {
-            return patientId;
+    private void validateInputs(Map<String, Double> blockageData,
+                                Map<String, Object> patientInfo,
+                                Map<String, Double> predictiveModelOutput) throws RiskScoringException {
+        if (blockageData == null || blockageData.isEmpty()) {
+            throw new RiskScoringException("Blockage data is missing or empty");
         }
-
-        public int getAge() {
-            return age;
+        if (patientInfo == null || patientInfo.isEmpty()) {
+            throw new RiskScoringException("Patient information is missing or empty");
         }
-
-        public boolean isHistoryOfHypertension() {
-            return historyOfHypertension;
+        if (predictiveModelOutput == null) {
+            throw new RiskScoringException("Predictive model outputs are null");
         }
-
-        public boolean isHistoryOfDiabetes() {
-            return historyOfDiabetes;
+        for (Map.Entry<String, Double> entry : blockageData.entrySet()) {
+            Double percent = entry.getValue();
+            if (percent == null || percent < 0.0 || percent > 100.0) {
+                throw new RiskScoringException("Invalid blockage percentage for artery: " + entry.getKey());
+            }
         }
-
-        public boolean isHistoryOfSmoking() {
-            return historyOfSmoking;
+        Object ageObj = patientInfo.get("age");
+        if (!(ageObj instanceof Integer) || ((Integer) ageObj) < 0 || ((Integer) ageObj) > 120) {
+            throw new RiskScoringException("Invalid or missing patient age");
         }
+    }
 
-        public boolean isHistoryOfFamilyCoronaryDisease() {
-            return historyOfFamilyCoronaryDisease;
+    private double computeBlockageFactor(Map<String, Double> blockageData) {
+        // Weighted sum of blockage percentages normalized by 100
+        // More critical arteries could be weighted higher; example weights here:
+        Map<String, Double> arteryWeights = Map.of(
+                "left_main", 1.5,
+                "left_Anterior_descending", 1.3,
+                "right_coronary", 1.0,
+                "circumflex", 1.1
+        );
+        double totalWeight = 0.0;
+        double weightedSum = 0.0;
+
+        for (Map.Entry<String, Double> entry : blockageData.entrySet()) {
+            double weight = arteryWeights.getOrDefault(entry.getKey().toLowerCase(), 1.0);
+            weightedSum += (entry.getValue() / 100.0) * weight;
+            totalWeight += weight;
         }
+        return (totalWeight > 0) ? (weightedSum / totalWeight) : 0.0;
+    }
 
-        /**
-         * Generates a cache key part based on patient relevant data to avoid stale cache for changing history.
-         */
-        public String cacheKey() {
-            return patientId + "-" + age + "-" +
-                    (historyOfHypertension ? "H1" : "H0") +
-                    (historyOfDiabetes ? "D1" : "D0") +
-                    (historyOfSmoking ? "S1" : "S0") +
-                    (historyOfFamilyCoronaryDisease ? "F1" : "F0");
+    private double computePatientFactor(Map<String, Object> patientInfo) {
+        int age = (Integer) patientInfo.get("age");
+        String sex = safeString(patientInfo.get("sex")).toLowerCase();
+        boolean smoker = Boolean.TRUE.equals(patientInfo.get("smoker"));
+
+        // Simple scoring: older age increases factor, males higher factor, smokers higher factor
+        double ageFactor = Math.min(age / 100.0, 1.0);
+        double sexFactor = "male".equals(sex) ? 0.1 : 0.0;
+        double smokerFactor = smoker ? 0.15 : 0.0;
+
+        return ageFactor + sexFactor + smokerFactor;
+    }
+
+    private String safeString(Object obj) {
+        return (obj == null) ? "" : obj.toString();
+    }
+
+    private double aggregatePredictiveModelOutput(Map<String, Double> predictiveModelOutput) {
+        if (predictiveModelOutput.isEmpty()) {
+            return 0.0;
         }
+        // Average of model output probabilities (values expected between 0 and 1)
+        double sum = 0.0;
+        int count = 0;
+        for (Double val : predictiveModelOutput.values()) {
+            if (val != null && val >= 0.0 && val <= 1.0) {
+                sum += val;
+                count++;
+            }
+        }
+        return (count == 0) ? 0.0 : (sum / count);
+    }
 
-        @Override
-        public String toString() {
-            return "PatientData{" +
-                    "patientId='" + patientId + '\'' +
-                    ", age=" + age +
-                    ", historyOfHypertension=" + historyOfHypertension +
-                    ", historyOfDiabetes=" + historyOfDiabetes +
-                    ", historyOfSmoking=" + historyOfSmoking +
-                    ", historyOfFamilyCoronaryDisease=" + historyOfFamilyCoronaryDisease +
-                    '}';
+    private double normalizeScore(double rawScore) {
+        // Normalize score to [0,1] range assuming max raw score approx 2.0
+        double normalized = rawScore / 2.0;
+        if (normalized < 0.0) normalized = 0.0;
+        if (normalized > 1.0) normalized = 1.0;
+        return normalized;
+    }
+
+    private double computeMarginOfError(Map<String, Double> blockageData,
+                                        Map<String, Object> patientInfo,
+                                        Map<String, Double> predictiveModelOutput) {
+        // Placeholder confidence interval calculation example:
+        // Assume standard error depends on variability in blockage data & model outputs
+
+        double blockageVariance = computeVariance(blockageData.values(), 100.0);
+        double modelVariance = computeVariance(predictiveModelOutput.values(), 1.0);
+
+        // Simple combined standard error with weighting
+        double stdError = Math.sqrt(blockageVariance * 0.4 + modelVariance * 0.6);
+
+        // Approximate 95% CI margin (1.96 * std error)
+        return Math.min(0.3, 1.96 * stdError); // Cap margin to 0.3 max
+    }
+
+    private double computeVariance(Iterable<Double> values, double scale) {
+        if (values == null) return 0.0;
+        double mean = 0.0;
+        int n = 0;
+        for (Double v : values) {
+            if (v != null) {
+                double scaled = v / scale;
+                mean += scaled;
+                n++;
+            }
+        }
+        if (n == 0) return 0.0;
+        mean /= n;
+
+        double varianceSum = 0.0;
+        for (Double v : values) {
+            if (v != null) {
+                double scaled = v / scale;
+                varianceSum += (scaled - mean) * (scaled - mean);
+            }
+        }
+        return (n > 1) ? (varianceSum / (n - 1)) : 0.0;
+    }
+
+    private SeverityLevel stratifyRisk(double score) {
+        if (score < 0.33) {
+            return SeverityLevel.LOW;
+        } else if (score < 0.66) {
+            return SeverityLevel.MEDIUM;
+        } else {
+            return SeverityLevel.HIGH;
         }
     }
 }
