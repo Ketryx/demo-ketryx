@@ -1,205 +1,255 @@
 ```python
-import time
-import threading
-import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from collections import deque, defaultdict
-from typing import Dict, Any, List, Callable
+import asyncio
+import concurrent.futures
 import functools
-import statistics
+import logging
+import time
+from collections import defaultdict
+from threading import Lock
 
-# Setup logger
-logger = logging.getLogger("PerformanceOptimizer")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-formatter = logging.Formatter("[%(asctime)s] %(levelname)s %(message)s")
-handler.setFormatter(formatter)
-if not logger.hasHandlers():
-    logger.addHandler(handler)
+import psutil
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
-# Alerting function placeholder (to be integrated with actual alerting system)
-def send_alert(message: str) -> None:
-    # TODO: replace with real alert integration (email, pager, etc.)
-    logger.warning(f"ALERT: {message}")
-
-class LatencyMonitor:
-    def __init__(self, threshold_seconds: float = 0.5, window_size: int = 50, alert_fn: Callable[[str], None] = send_alert):
-        self.threshold = threshold_seconds
-        self.latencies = deque(maxlen=window_size)
-        self.alert_fn = alert_fn
-        self.lock = threading.Lock()
-
-    def record(self, latency: float) -> None:
-        with self.lock:
-            self.latencies.append(latency)
-            if latency > self.threshold:
-                self.alert_fn(f"Latency breach: {latency:.3f}s > {self.threshold}s (threshold)")
-
-    def average_latency(self) -> float:
-        with self.lock:
-            if not self.latencies:
-                return 0.0
-            return statistics.mean(self.latencies)
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
-class RiskScoreCache:
+class LazyPatientData:
+    def __init__(self, patient_id, db_session):
+        self._patient_id = patient_id
+        self._db_session = db_session
+        self._data = None
+        self._lock = Lock()
+
+    async def load_data(self):
+        if self._data is None:
+            async with self._lock:
+                if self._data is None:
+                    self._data = await self._fetch_patient_data()
+        return self._data
+
+    async def _fetch_patient_data(self):
+        query = sa.text(
+            "SELECT * FROM patient_data WHERE patient_id = :pid"
+        )
+        result = await self._db_session.execute(query, {"pid": self._patient_id})
+        row = result.first()
+        return dict(row) if row else {}
+
+
+def memoize_async(func):
+    cache = {}
+    lock = asyncio.Lock()
+
+    @functools.wraps(func)
+    async def memoized(*args):
+        key = args
+        async with lock:
+            if key in cache:
+                return cache[key]
+        result = await func(*args)
+        async with lock:
+            cache[key] = result
+        return result
+
+    return memoized
+
+
+def memoize(func):
+    cache = {}
+    lock = Lock()
+
+    @functools.wraps(func)
+    def memoized(*args):
+        key = args
+        with lock:
+            if key in cache:
+                return cache[key]
+        result = func(*args)
+        with lock:
+            cache[key] = result
+        return result
+
+    return memoized
+
+
+class PerformanceMonitor:
     def __init__(self):
-        self._cache_lock = threading.Lock()
-        self._cache: Dict[str, float] = {}
+        self.timings = defaultdict(list)
 
-    def get(self, key: str):
-        with self._cache_lock:
-            return self._cache.get(key)
+    def profile(self, name):
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapped(*args, **kwargs):
+                start = time.perf_counter()
+                result = func(*args, **kwargs)
+                elapsed = time.perf_counter() - start
+                self.timings[name].append(elapsed)
+                if elapsed > 1.0:
+                    logger.warning(f"Slow execution {name}: {elapsed:.3f}s")
+                else:
+                    logger.debug(f"Execution {name}: {elapsed:.3f}s")
+                return result
 
-    def set(self, key: str, value: float):
-        with self._cache_lock:
-            self._cache[key] = value
+            return wrapped
 
-    def invalidate(self, key: str):
-        with self._cache_lock:
-            if key in self._cache:
-                del self._cache[key]
+        def async_wrapper(func_async):
+            @functools.wraps(func_async)
+            async def wrapped_async(*args, **kwargs):
+                start = time.perf_counter()
+                result = await func_async(*args, **kwargs)
+                elapsed = time.perf_counter() - start
+                self.timings[name].append(elapsed)
+                if elapsed > 1.0:
+                    logger.warning(f"Slow async execution {name}: {elapsed:.3f}s")
+                else:
+                    logger.debug(f"Async execution {name}: {elapsed:.3f}s")
+                return result
 
-    def bulk_invalidate(self, keys: List[str]):
-        with self._cache_lock:
-            for key in keys:
-                self._cache.pop(key, None)
+            return wrapped_async
+
+        return async_wrapper if asyncio.iscoroutinefunction(func) else decorator
+
+
+class AutoScaler:
+    def __init__(self, max_workers=32, min_workers=2):
+        self.min_workers = min_workers
+        self.max_workers = max_workers
+        self.current_workers = min_workers
+
+    def adjust_workers(self, cpu_usage):
+        if cpu_usage > 75 and self.current_workers > self.min_workers:
+            self.current_workers = max(self.min_workers, self.current_workers - 1)
+            logger.info(f"High CPU {cpu_usage}%, scaling down workers to {self.current_workers}")
+        elif cpu_usage < 50 and self.current_workers < self.max_workers:
+            self.current_workers = min(self.max_workers, self.current_workers + 1)
+            logger.info(f"Low CPU {cpu_usage}%, scaling up workers to {self.current_workers}")
+
+    def get_workers(self):
+        return self.current_workers
 
 
 class PerformanceOptimizer:
-    def __init__(self, db_client, max_workers: int = 8):
-        """
-        :param db_client: Database client supporting optimized queries
-        :param max_workers: Max parallel workers for batch processing
-        """
-        self.db_client = db_client
-        self.cache = RiskScoreCache()
-        self.latency_monitor = LatencyMonitor()
-        self.thread_pool = ThreadPoolExecutor(max_workers=max_workers)
-        self._update_lock = threading.Lock()
+    def __init__(self, db_url: str):
+        self._engine = create_async_engine(db_url, future=True, echo=False, pool_size=20, max_overflow=40)
+        self._async_session_factory = sessionmaker(
+            self._engine, expire_on_commit=False, class_=AsyncSession
+        )
+        self._cache = {}
+        self._cache_lock = Lock()
+        self._monitor = PerformanceMonitor()
+        self._autoscaler = AutoScaler()
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=self._autoscaler.get_workers())
+        self._scaling_task = None
+        self._loop = asyncio.get_event_loop()
 
-    def _optimized_db_query(self, query: str, params: Dict[str, Any] = None) -> List[Dict]:
-        """
-        Perform an optimized database query with indexing and reduced data fetch.
-        Assumes db_client supports parameterized query and indexing.
-        """
-        start = time.perf_counter()
-        result = self.db_client.execute(query, params)
-        latency = time.perf_counter() - start
-        self.latency_monitor.record(latency)
-        logger.debug(f"DB query latency: {latency:.3f}s")
-        return result
+    def start_auto_scaling(self):
+        if self._scaling_task is None:
+            self._scaling_task = self._loop.create_task(self._auto_scale_loop())
 
-    def _compute_risk_score(self, record: Dict[str, Any]) -> float:
-        """
-        Core algorithm to compute risk score given a data record.
-        Algorithm optimized to O(n) or better and avoids expensive operations.
-        """
-        # Example simplified scoring:
-        # score = weighted sum of selected normalized features
-        features = record.get("features", {})
-        score = 0.0
-        for k, v in features.items():
-            # Apply a fast lightweight transformation and weights
-            w = SCORE_WEIGHTS.get(k, 0.0)
-            score += w * self._lightweight_transform(v)
-        return min(max(score, 0.0), 1.0)  # clamp between 0 and 1
+    async def _auto_scale_loop(self):
+        while True:
+            cpu = psutil.cpu_percent(interval=1)
+            self._autoscaler.adjust_workers(cpu)
+            workers = self._autoscaler.get_workers()
+            self._executor._max_workers = workers
+            await asyncio.sleep(5)
 
-    @staticmethod
-    def _lightweight_transform(value: Any) -> float:
-        # Fast normalization or transformation: e.g., min-max clamping and scaling
-        try:
-            v = float(value)
-            # Clamp scale between 0 and 1 (example)
-            return max(0.0, min(1.0, v))
-        except (TypeError, ValueError):
-            return 0.0
+    def _cache_result(self, key, value):
+        with self._cache_lock:
+            self._cache[key] = (value, time.time())
 
-    def get_risk_score(self, record_id: str, record_data_fn: Callable[[], Dict[str, Any]]) -> float:
-        """
-        Retrieve the risk score for a record_id using cache and compute if missing.
-        :param record_id: unique id of the record
-        :param record_data_fn: callable to lazily fetch record data if cache miss
-        :return: risk score float in [0,1]
-        """
-        cached_score = self.cache.get(record_id)
-        if cached_score is not None:
-            return cached_score
+    def _get_cached_result(self, key, max_age_seconds=60):
+        with self._cache_lock:
+            cached = self._cache.get(key)
+            if cached is None:
+                return None
+            value, timestamp = cached
+            if time.time() - timestamp > max_age_seconds:
+                del self._cache[key]
+                return None
+            return value
 
-        start = time.perf_counter()
-        record = record_data_fn()
-        score = self._compute_risk_score(record)
-        self.cache.set(record_id, score)
-        latency = time.perf_counter() - start
-        self.latency_monitor.record(latency)
-        if latency > self.latency_monitor.threshold:
-            logger.info(f"Computed risk score for {record_id} in {latency:.3f}s")
-        return score
+    @memoize
+    def _calculate_intermediate(self, data_hash, intermediate_params):
+        # Expensive intermediate calculation mocked here
+        time.sleep(0.05)
+        return f"intermediate_result_{data_hash}_{intermediate_params}"
 
-    def incremental_update(self, updated_records: List[Dict[str, Any]]) -> None:
-        """
-        Incrementally update cache with new/changed records only.
-        Invalidates and recomputes affected cache entries.
-        """
-        with self._update_lock:
-            keys_to_invalidate = [r["id"] for r in updated_records if "id" in r]
-            self.cache.bulk_invalidate(keys_to_invalidate)
+    @memoize_async
+    async def _fetch_optimized_patient_data(self, patient_id, session: AsyncSession):
+        lazy_data = LazyPatientData(patient_id, session)
+        return await lazy_data.load_data()
 
-            futures = []
-            for record in updated_records:
-                record_id = record["id"]
-                futures.append(
-                    self.thread_pool.submit(
-                        self._compute_and_cache, record_id, record
-                    )
-                )
-            for f in as_completed(futures):
-                try:
-                    f.result()
-                except Exception as ex:
-                    logger.error(f"Error in incremental update: {ex}")
+    @PerformanceMonitor.profile
+    def _sync_risk_assessment(self, patient_data, params):
+        intermediate_key = (hash(frozenset(patient_data.items())), frozenset(params.items()))
+        cached_intermediate = self._get_cached_result(intermediate_key)
+        if cached_intermediate:
+            intermediate = cached_intermediate
+        else:
+            intermediate = self._calculate_intermediate(intermediate_key[0], intermediate_key[1])
+            self._cache_result(intermediate_key, intermediate)
 
-    def _compute_and_cache(self, record_id: str, record: Dict[str, Any]) -> None:
-        score = self._compute_risk_score(record)
-        self.cache.set(record_id, score)
+        time.sleep(0.1)  # Simulate risk calc workload
+        risk_score = hash(intermediate) % 100 / 100
+        return risk_score
 
-    def batch_assess(self, records: List[Dict[str, Any]]) -> Dict[str, float]:
-        """
-        Compute risk scores in parallel for batch assessments.
-        Returns mapping from record_id to risk score.
-        """
-        results: Dict[str, float] = {}
-        futures = {}
-        for record in records:
-            record_id = record["id"]
-            futures[self.thread_pool.submit(self._compute_risk_score, record)] = record_id
+    @PerformanceMonitor.profile
+    async def _async_risk_assessment(self, patient_id, params, session: AsyncSession):
+        patient_data = await self._fetch_optimized_patient_data(patient_id, session)
+        intermediate_key = (hash(frozenset(patient_data.items())), frozenset(params.items()))
+        cached_intermediate = self._get_cached_result(intermediate_key)
+        if cached_intermediate:
+            intermediate = cached_intermediate
+        else:
+            loop = asyncio.get_event_loop()
+            intermediate = await loop.run_in_executor(
+                None, self._calculate_intermediate, intermediate_key[0], intermediate_key[1]
+            )
+            self._cache_result(intermediate_key, intermediate)
 
-        for future in as_completed(futures):
-            record_id = futures[future]
-            try:
-                score = future.result()
-                results[record_id] = score
-                self.cache.set(record_id, score)
-            except Exception as ex:
-                logger.error(f"Batch assessment failed for {record_id}: {ex}")
+        await asyncio.sleep(0.1)
+        risk_score = hash(intermediate) % 100 / 100
+        return risk_score
 
+    async def batch_async_risk_assessments(self, patient_ids, params_list):
+        tasks = []
+        async with self._async_session_factory() as session:
+            for patient_id, params in zip(patient_ids, params_list):
+                tasks.append(self._async_risk_assessment(patient_id, params, session))
+            # Run batch with concurrency capped by autoscaler
+            semaphore = asyncio.Semaphore(self._autoscaler.get_workers())
+
+            async def sem_task(task_coro):
+                async with semaphore:
+                    return await task_coro
+
+            wrapped_tasks = [sem_task(task) for task in tasks]
+            results = await asyncio.gather(*wrapped_tasks)
         return results
 
+    def batch_sync_risk_assessments(self, patient_data_list, params_list):
+        futures = []
+        for patient_data, params in zip(patient_data_list, params_list):
+            futures.append(self._executor.submit(self._sync_risk_assessment, patient_data, params))
+        results = [f.result(timeout=0.9) for f in futures]  # sub-second target with margin
+        return results
 
-# Example static weights (should be loaded/configured externally in practice)
-SCORE_WEIGHTS = {
-    "feature1": 0.3,
-    "feature2": 0.25,
-    "feature3": 0.2,
-    "feature4": 0.15,
-    "feature5": 0.1,
-}
+    async def assess_risk(self, patient_id, params):
+        async with self._async_session_factory() as session:
+            result = await self._async_risk_assessment(patient_id, params, session)
+        return result
 
-
-# Example DB client interface stub for clarity
-class DBClient:
-    def execute(self, query: str, params: Dict[str, Any] = None) -> List[Dict]:
-        # Must be implemented in actual client
-        raise NotImplementedError
-
+    async def close(self):
+        if self._scaling_task:
+            self._scaling_task.cancel()
+            try:
+                await self._scaling_task
+            except asyncio.CancelledError:
+                pass
+        await self._engine.dispose()
+        self._executor.shutdown(wait=True)
 ```
