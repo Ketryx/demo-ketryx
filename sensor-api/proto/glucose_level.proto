@@ -1,0 +1,38 @@
+```proto
+syntax = "proto3";
+
+package sensor_api;
+
+import "google/protobuf/timestamp.proto";
+
+message GlucoseLevel {
+  string clientId = 1;
+  int32 mgDl = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  DataQuality dataQuality = 4;
+}
+
+enum DataQuality {
+  DATA_QUALITY_UNKNOWN = 0;
+  DATA_QUALITY_GOOD = 1;
+  DATA_QUALITY_BAD = 2;
+  DATA_QUALITY_UNRELIABLE = 3;
+}
+
+message Acknowledgment {
+  bool ack = 1;
+  string id = 2;
+}
+
+message Error {
+  ErrorType type = 1;
+  string message = 2;
+}
+
+enum ErrorType {
+  ERROR_TYPE_UNSPECIFIED = 0;
+  ERROR_TYPE_VALIDATION = 1;
+  ERROR_TYPE_PROCESSING = 2;
+  ERROR_TYPE_UNKNOWN = 3;
+}
+```
