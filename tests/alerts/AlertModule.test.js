@@ -1,165 +1,228 @@
 ```javascript
 import AlertModule from '../../src/alerts/AlertModule';
+import BlockageDetectionModule from '../../src/blockage/BlockageDetectionModule';
 
-jest.useFakeTimers();
+jest.mock('../../src/blockage/BlockageDetectionModule');
 
 describe('AlertModule', () => {
   let alertModule;
-  const mockNow = new Date('2024-01-01T12:00:00Z');
-
-  const fixtures = {
-    validReading: { sensorId: 'sensor1', value: 75, timestamp: new Date(mockNow.getTime()) },
-    outdatedReading: { sensorId: 'sensor1', value: 75, timestamp: new Date(mockNow.getTime() - 3600 * 1000 * 2) }, // 2 hours old
-    limitExceededReading: { sensorId: 'sensor1', value: 101, timestamp: new Date(mockNow.getTime()) },
-    criticalReading: { sensorId: 'sensor1', value: 150, timestamp: new Date(mockNow.getTime()) },
-  };
-
-  const limits = {
-    warning: 100,
-    critical: 140,
-  };
+  let mockDashboardNotify;
+  let now;
 
   beforeEach(() => {
-    alertModule = new AlertModule({ limits });
-    jest.setSystemTime(mockNow);
+    mockDashboardNotify = jest.fn();
+    alertModule = new AlertModule({
+      notifyDashboard: mockDashboardNotify,
+      sensorThresholds: {
+        temperature: { min: 0, max: 50 },
+        pressure: { min: 10, max: 100 },
+      },
+      readingTimeoutMs: 60000, // 1 minute
+      maxQueueSize: 5,
+    });
+    now = Date.now();
+    jest.useFakeTimers('modern');
+    jest.setSystemTime(now);
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.clearAllMocks();
-    jest.clearAllTimers();
   });
 
-  describe('alerts trigger correctly when limits are exceeded', () => {
-    test('should not trigger alert for normal readings', () => {
-      const alertSpy = jest.spyOn(alertModule, 'triggerAlert');
-      alertModule.processReading(fixtures.validReading);
-      expect(alertSpy).not.toHaveBeenCalled();
+  const validSensorData = {
+    id: 'sensor-1',
+    type: 'temperature',
+    value: 25,
+    timestamp: now,
+  };
+
+  describe('alert triggering when sensor exceeds thresholds', () => {
+    it('triggers alert when value exceeds max threshold', () => {
+      const exceedingData = { ...validSensorData, value: 60 };
+      alertModule.processSensorData(exceedingData);
+      expect(alertModule.alertQueue).toHaveLength(1);
+      const alert = alertModule.alertQueue[0];
+      expect(alert.severity).toBe('high');
+      expect(mockDashboardNotify).toHaveBeenCalledWith(alert);
     });
 
-    test('should trigger warning alert when value exceeds warning limit', () => {
-      const alertSpy = jest.spyOn(alertModule, 'triggerAlert');
-      alertModule.processReading(fixtures.limitExceededReading);
-      expect(alertSpy).toHaveBeenCalledTimes(1);
-      expect(alertSpy).toHaveBeenCalledWith(expect.objectContaining({
-        sensorId: fixtures.limitExceededReading.sensorId,
-        priority: 'warning',
-        value: fixtures.limitExceededReading.value,
+    it('triggers alert when value is below min threshold', () => {
+      const lowData = { ...validSensorData, value: -5 };
+      alertModule.processSensorData(lowData);
+      expect(alertModule.alertQueue).toHaveLength(1);
+      const alert = alertModule.alertQueue[0];
+      expect(alert.severity).toBe('high');
+      expect(mockDashboardNotify).toHaveBeenCalledWith(alert);
+    });
+
+    it('does not trigger alert when value is within thresholds', () => {
+      alertModule.processSensorData(validSensorData);
+      expect(alertModule.alertQueue).toHaveLength(0);
+      expect(mockDashboardNotify).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('alert triggering for outdated sensor readings', () => {
+    it('triggers alert when sensor reading is outdated', () => {
+      const oldTimestamp = now - 120000; // 2 minutes old
+      const outdatedData = { ...validSensorData, timestamp: oldTimestamp };
+      alertModule.processSensorData(outdatedData);
+      expect(alertModule.alertQueue).toHaveLength(1);
+      const alert = alertModule.alertQueue[0];
+      expect(alert.type).toBe('outdated-reading');
+      expect(alert.severity).toBe('medium');
+      expect(mockDashboardNotify).toHaveBeenCalledWith(alert);
+    });
+
+    it('does not trigger outdated alert if reading is fresh', () => {
+      alertModule.processSensorData(validSensorData);
+      expect(alertModule.alertQueue).toHaveLength(0);
+    });
+  });
+
+  describe('proper severity level assignment', () => {
+    it('assigns high severity for critical threshold breaches', () => {
+      const criticalData = { ...validSensorData, value: 1000 }; // Extreme high value
+      alertModule.processSensorData(criticalData);
+      expect(alertModule.alertQueue[0].severity).toBe('high');
+    });
+
+    it('assigns medium severity for outdated readings', () => {
+      const oldTimestamp = now - 90000;
+      const outdatedData = { ...validSensorData, timestamp: oldTimestamp };
+      alertModule.processSensorData(outdatedData);
+      expect(alertModule.alertQueue[0].severity).toBe('medium');
+    });
+
+    it('assigns low severity for borderline threshold breaches', () => {
+      alertModule.setSeverityRules({
+        temperature: {
+          lowThreshold: { min: 48, max: 52, severity: 'low' },
+          criticalThreshold: { min: 0, max: 50, severity: 'high' },
+        },
+      });
+      const borderlineData = { ...validSensorData, value: 49 };
+      alertModule.processSensorData(borderlineData);
+      expect(alertModule.alertQueue).toHaveLength(0);
+
+      const borderlineHighData = { ...validSensorData, value: 51 };
+      alertModule.processSensorData(borderlineHighData);
+      expect(alertModule.alertQueue[0].severity).toBe('low');
+    });
+  });
+
+  describe('alert queue management', () => {
+    it('maintains max queue size by dropping oldest alerts', () => {
+      const dataPoints = [
+        { ...validSensorData, value: -5 },
+        { ...validSensorData, value: 60 },
+        { ...validSensorData, value: 70 },
+        { ...validSensorData, value: -10 },
+        { ...validSensorData, value: 80 },
+        { ...validSensorData, value: 90 }, // 6th alert, should drop the first
+      ];
+      dataPoints.forEach(d => alertModule.processSensorData(d));
+      expect(alertModule.alertQueue).toHaveLength(alertModule.maxQueueSize);
+      expect(alertModule.alertQueue[0].sensorId).toBe('sensor-1');
+      expect(alertModule.alertQueue[0].value).toBe(60);
+    });
+
+    it('allows removing alerts from queue', () => {
+      const alertData = { ...validSensorData, value: 60 };
+      alertModule.processSensorData(alertData);
+      const idToRemove = alertModule.alertQueue[0].id;
+      alertModule.removeAlert(idToRemove);
+      expect(alertModule.alertQueue).toHaveLength(0);
+    });
+  });
+
+  describe('notification delivery to dashboard', () => {
+    it('calls dashboard notify on alert creation', () => {
+      const alertData = { ...validSensorData, value: 60 };
+      alertModule.processSensorData(alertData);
+      expect(mockDashboardNotify).toHaveBeenCalledTimes(1);
+      expect(mockDashboardNotify).toHaveBeenCalledWith(expect.objectContaining({
+        sensorId: alertData.id,
+        value: alertData.value,
       }));
     });
 
-    test('should trigger critical alert when value exceeds critical limit', () => {
-      const alertSpy = jest.spyOn(alertModule, 'triggerAlert');
-      alertModule.processReading(fixtures.criticalReading);
-      expect(alertSpy).toHaveBeenCalledTimes(1);
-      expect(alertSpy).toHaveBeenCalledWith(expect.objectContaining({
-        sensorId: fixtures.criticalReading.sensorId,
-        priority: 'critical',
-        value: fixtures.criticalReading.value,
+    it('does not notify when no alert is created', () => {
+      alertModule.processSensorData(validSensorData);
+      expect(mockDashboardNotify).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('error handling for invalid sensor data', () => {
+    it('throws error when sensor data is missing required fields', () => {
+      const invalidData = { value: 10, timestamp: now };
+      expect(() => alertModule.processSensorData(invalidData)).toThrow(/Invalid sensor data/);
+    });
+
+    it('throws error when sensor value is not a number', () => {
+      const invalidData = { ...validSensorData, value: 'NaN' };
+      expect(() => alertModule.processSensorData(invalidData)).toThrow(/Invalid sensor value/);
+    });
+
+    it('handles error gracefully and does not add alert', () => {
+      try {
+        alertModule.processSensorData({ invalid: true });
+      } catch (e) {
+        // Expected error
+      }
+      expect(alertModule.alertQueue).toHaveLength(0);
+      expect(mockDashboardNotify).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('performance under high alert volume', () => {
+    it('processes 1000 alerts within reasonable time', () => {
+      const heavyLoadData = Array.from({ length: 1000 }).map((_, i) => ({
+        id: `sensor-${i}`,
+        type: 'temperature',
+        value: 60 + i, // All exceed max threshold
+        timestamp: now,
       }));
+      const start = performance.now();
+      heavyLoadData.forEach((data) => alertModule.processSensorData(data));
+      const end = performance.now();
+      expect(alertModule.alertQueue.length).toBe(alertModule.maxQueueSize);
+      expect(end - start).toBeLessThan(500); // Should process under 500ms
     });
   });
 
-  describe('outdated reading detection works properly', () => {
-    test('should detect outdated reading and flag appropriately', () => {
-      const outdatedSpy = jest.spyOn(alertModule, 'handleOutdatedReading');
-      alertModule.processReading(fixtures.outdatedReading);
-      expect(outdatedSpy).toHaveBeenCalledWith(fixtures.outdatedReading);
-      // Should not trigger any new alerts for outdated reading by value
-      expect(alertModule.getAlertHistory()).toHaveLength(0);
-    });
-  });
+  describe('integration with blockage detection parent module', () => {
+    let blockageDetectionInstance;
 
-  describe('alert priority assignment is accurate', () => {
-    test.each`
-      value   | expectedPriority
-      ${90}  | ${null}
-      ${101} | ${'warning'}
-      ${139} | ${'warning'}
-      ${140} | ${'critical'}
-      ${160} | ${'critical'}
-    `('value $value sets priority $expectedPriority', ({ value, expectedPriority }) => {
-      const reading = { ...fixtures.validReading, value };
-      const priority = alertModule.assignPriority(reading.value);
-      expect(priority).toBe(expectedPriority);
-    });
-  });
-
-  describe('deduplication prevents duplicate alerts', () => {
-    test('should not generate duplicate alerts for identical readings', () => {
-      const triggerSpy = jest.spyOn(alertModule, 'triggerAlert');
-      alertModule.processReading(fixtures.limitExceededReading);
-      alertModule.processReading(fixtures.limitExceededReading);
-      expect(triggerSpy).toHaveBeenCalledTimes(1);
+    beforeEach(() => {
+      blockageDetectionInstance = {
+        onBlockageAlert: jest.fn(),
+      };
+      BlockageDetectionModule.mockImplementation(() => blockageDetectionInstance);
+      alertModule = new AlertModule({
+        notifyDashboard: mockDashboardNotify,
+        sensorThresholds: { temperature: { min: 0, max: 50 } },
+        readingTimeoutMs: 60000,
+        maxQueueSize: 5,
+        blockageDetectionModule: new BlockageDetectionModule(),
+      });
     });
 
-    test('should generate a new alert if reading changes significantly', () => {
-      const triggerSpy = jest.spyOn(alertModule, 'triggerAlert');
-      alertModule.processReading({...fixtures.limitExceededReading, value: 105});
-      alertModule.processReading({...fixtures.limitExceededReading, value: 110});
-      expect(triggerSpy).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('critical alerts escalate appropriately', () => {
-    test('should escalate alert on repeated critical readings', () => {
-      const escalateSpy = jest.spyOn(alertModule, 'escalateAlert');
-      alertModule.processReading(fixtures.criticalReading);
-      alertModule.processReading({...fixtures.criticalReading, timestamp: new Date(mockNow.getTime() + 60000)});
-      expect(escalateSpy).toHaveBeenCalledTimes(1);
-      expect(escalateSpy).toHaveBeenCalledWith(expect.objectContaining({
-        sensorId: fixtures.criticalReading.sensorId,
-        priority: 'critical',
-      }));
-    });
-
-    test('should not escalate if critical alert is not repeated', () => {
-      const escalateSpy = jest.spyOn(alertModule, 'escalateAlert');
-      alertModule.processReading(fixtures.criticalReading);
-      alertModule.processReading({...fixtures.limitExceededReading, timestamp: new Date(mockNow.getTime() + 60000)});
-      expect(escalateSpy).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('alert history is maintained', () => {
-    test('should keep history of all triggered alerts', () => {
-      alertModule.processReading(fixtures.limitExceededReading);
-      alertModule.processReading(fixtures.criticalReading);
-      const history = alertModule.getAlertHistory();
-      expect(history).toHaveLength(2);
-      expect(history[0]).toEqual(expect.objectContaining({
-        sensorId: fixtures.limitExceededReading.sensorId,
-        priority: 'warning',
-      }));
-      expect(history[1]).toEqual(expect.objectContaining({
-        sensorId: fixtures.criticalReading.sensorId,
-        priority: 'critical',
+    it('calls blockage detection on critical alerts', () => {
+      const criticalData = { id: 'sensor-99', type: 'temperature', value: 100, timestamp: now };
+      alertModule.processSensorData(criticalData);
+      expect(blockageDetectionInstance.onBlockageAlert).toHaveBeenCalledTimes(1);
+      expect(blockageDetectionInstance.onBlockageAlert).toHaveBeenCalledWith(expect.objectContaining({
+        sensorId: 'sensor-99',
+        severity: 'high',
       }));
     });
 
-    test('history should have timestamps and unique ids', () => {
-      alertModule.processReading(fixtures.limitExceededReading);
-      const history = alertModule.getAlertHistory();
-      const entry = history[0];
-      expect(entry.timestamp).toEqual(mockNow);
-      expect(typeof entry.id).toBe('string');
-      expect(entry.id).toHaveLength(36); // UUID v4 length
-    });
-  });
-
-  describe('error conditions are handled gracefully', () => {
-    test('should throw descriptive error on invalid reading structure', () => {
-      expect(() => alertModule.processReading(null)).toThrow('Invalid reading');
-      expect(() => alertModule.processReading({})).toThrow('Invalid reading');
-    });
-
-    test('should catch errors during alert triggering and log without throwing', () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      jest.spyOn(alertModule, 'triggerAlert').mockImplementation(() => { throw new Error('Alert failure'); });
-
-      expect(() => alertModule.processReading(fixtures.limitExceededReading)).not.toThrow();
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Alert failure'));
-
-      consoleErrorSpy.mockRestore();
+    it('does not call blockage detection for non-critical alerts', () => {
+      const outdatedData = { id: 'sensor-99', type: 'temperature', value: 25, timestamp: now - 70000 };
+      alertModule.processSensorData(outdatedData);
+      expect(blockageDetectionInstance.onBlockageAlert).not.toHaveBeenCalled();
     });
   });
 });
