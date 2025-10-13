@@ -1,0 +1,212 @@
+[
+  {
+    "patient_id": "PT-001-2025",
+    "age": 45,
+    "medical_history": ["hypertension", "type_2_diabetes"],
+    "risk_factors": ["smoking", "family_history_cvd"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 145, "diastolic": 92},
+      "heart_rate": 78,
+      "glucose": 142,
+      "temperature": 98.6
+    },
+    "medications": ["metformin", "lisinopril", "atorvastatin"],
+    "expected_risk_score": 53.5
+  },
+  {
+    "patient_id": "PT-002-2025",
+    "age": 32,
+    "medical_history": [],
+    "risk_factors": [],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 118, "diastolic": 76},
+      "heart_rate": 72,
+      "glucose": 95,
+      "temperature": 98.2
+    },
+    "medications": [],
+    "expected_risk_score": 9.6
+  },
+  {
+    "patient_id": "PT-003-2025",
+    "age": 67,
+    "medical_history": ["coronary_artery_disease", "chronic_kidney_disease", "atrial_fibrillation"],
+    "risk_factors": ["obesity", "sedentary_lifestyle", "high_cholesterol"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 158, "diastolic": 96},
+      "heart_rate": 88,
+      "glucose": 168,
+      "temperature": 98.9
+    },
+    "medications": ["warfarin", "metoprolol", "furosemide", "insulin", "rosuvastatin"],
+    "expected_risk_score": 83.1
+  },
+  {
+    "patient_id": "PT-004-2025",
+    "age": 28,
+    "medical_history": ["asthma"],
+    "risk_factors": ["allergies"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 112, "diastolic": 72},
+      "heart_rate": 68,
+      "glucose": 88,
+      "temperature": 98.4
+    },
+    "medications": ["albuterol"],
+    "expected_risk_score": 18.4
+  },
+  {
+    "patient_id": "PT-005-2025",
+    "age": 54,
+    "medical_history": ["type_2_diabetes", "hyperlipidemia"],
+    "risk_factors": ["overweight", "family_history_diabetes"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 138, "diastolic": 88},
+      "heart_rate": 82,
+      "glucose": 156,
+      "temperature": 98.5
+    },
+    "medications": ["metformin", "glipizide", "pravastatin"],
+    "expected_risk_score": 48.2
+  },
+  {
+    "patient_id": "PT-006-2025",
+    "age": 71,
+    "medical_history": ["heart_failure", "chronic_obstructive_pulmonary_disease", "osteoarthritis"],
+    "risk_factors": ["former_smoker", "low_physical_activity"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 152, "diastolic": 90},
+      "heart_rate": 92,
+      "glucose": 118,
+      "temperature": 98.7
+    },
+    "medications": ["digoxin", "furosemide", "spironolactone", "tiotropium"],
+    "expected_risk_score": 66.3
+  },
+  {
+    "patient_id": "PT-007-2025",
+    "age": 39,
+    "medical_history": ["hypothyroidism"],
+    "risk_factors": [],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 122, "diastolic": 78},
+      "heart_rate": 70,
+      "glucose": 92,
+      "temperature": 98.3
+    },
+    "medications": ["levothyroxine"],
+    "expected_risk_score": 18.7
+  },
+  {
+    "patient_id": "PT-008-2025",
+    "age": 60,
+    "medical_history": ["hypertension", "type_2_diabetes", "peripheral_artery_disease"],
+    "risk_factors": ["smoking", "high_cholesterol", "family_history_stroke"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 162, "diastolic": 98},
+      "heart_rate": 86,
+      "glucose": 178,
+      "temperature": 98.8
+    },
+    "medications": ["amlodipine", "metformin", "clopidogrel", "atorvastatin"],
+    "expected_risk_score": 76.0
+  },
+  {
+    "patient_id": "PT-009-2025",
+    "age": 25,
+    "medical_history": [],
+    "risk_factors": ["occasional_alcohol_use"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 115, "diastolic": 74},
+      "heart_rate": 65,
+      "glucose": 86,
+      "temperature": 98.1
+    },
+    "medications": [],
+    "expected_risk_score": 15.5
+  },
+  {
+    "patient_id": "PT-010-2025",
+    "age": 48,
+    "medical_history": ["migraine", "depression"],
+    "risk_factors": ["stress"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 128, "diastolic": 82},
+      "heart_rate": 76,
+      "glucose": 102,
+      "temperature": 98.4
+    },
+    "medications": ["sumatriptan", "sertraline"],
+    "expected_risk_score": 24.4
+  },
+  {
+    "patient_id": "PT-011-2025",
+    "age": 76,
+    "medical_history": ["atrial_fibrillation", "heart_failure", "diabetes_type_2", "chronic_kidney_disease_stage_3"],
+    "risk_factors": ["age_over_75", "polypharmacy", "fall_risk"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 148, "diastolic": 88},
+      "heart_rate": 94,
+      "glucose": 152,
+      "temperature": 98.6
+    },
+    "medications": ["apixaban", "carvedilol", "furosemide", "insulin_glargine", "potassium"],
+    "expected_risk_score": 88.8
+  },
+  {
+    "patient_id": "PT-012-2025",
+    "age": 35,
+    "medical_history": ["gestational_diabetes"],
+    "risk_factors": ["family_history_diabetes"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 118, "diastolic": 76},
+      "heart_rate": 74,
+      "glucose": 106,
+      "temperature": 98.3
+    },
+    "medications": ["prenatal_vitamins"],
+    "expected_risk_score": 20.5
+  },
+  {
+    "patient_id": "PT-013-2025",
+    "age": 58,
+    "medical_history": ["hypertension", "hyperlipidemia", "gout"],
+    "risk_factors": ["alcohol_use", "high_purine_diet"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 142, "diastolic": 90},
+      "heart_rate": 80,
+      "glucose": 112,
+      "temperature": 98.7
+    },
+    "medications": ["losartan", "simvastatin", "allopurinol"],
+    "expected_risk_score": 46.4
+  },
+  {
+    "patient_id": "PT-014-2025",
+    "age": 42,
+    "medical_history": ["rheumatoid_arthritis"],
+    "risk_factors": ["autoimmune_disease"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 124, "diastolic": 80},
+      "heart_rate": 72,
+      "glucose": 94,
+      "temperature": 98.5
+    },
+    "medications": ["methotrexate", "folic_acid", "hydroxychloroquine"],
+    "expected_risk_score": 24.6
+  },
+  {
+    "patient_id": "PT-015-2025",
+    "age": 63,
+    "medical_history": ["coronary_artery_disease", "hypertension", "type_2_diabetes"],
+    "risk_factors": ["prior_myocardial_infarction", "smoking", "obesity"],
+    "vital_signs": {
+      "blood_pressure": {"systolic": 155, "diastolic": 94},
+      "heart_rate": 84,
+      "glucose": 164,
+      "temperature": 98.8
+    },
+    "medications": ["aspirin", "metoprolol", "lisinopril", "metformin", "atorvastatin", "nitroglycerin"],
+    "expected_risk_score": 81.9
+  }
+]

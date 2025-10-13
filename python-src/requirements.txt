@@ -6,3 +6,9 @@ pillow==9.2.0
 pyyaml==6.0
 rdiffweb==2.4.10
 tensorflow==2.7.0
+
+# Testing dependencies
+pytest==7.4.3
+pytest-timeout==2.2.0
+pytest-json-report==1.5.0
+pytest-html==4.1.1
