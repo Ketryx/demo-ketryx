@@ -8,7 +8,7 @@ public class SensorReadingTest {
     /**
      * Tests that sensor is read correctly.
      * @tests:SensorReading
-     * @itemTitle:"Test Sensor Reading (Java)"
+     * @itemTitle:"Test Sensor Reading (Java) this is an edit"
      */
     @Test
     public void sensorReadingTest() {

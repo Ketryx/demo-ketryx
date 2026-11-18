@@ -5,4 +5,4 @@ numpy==1.23.1
 pillow==9.2.0
 pyyaml==6.0
 rdiffweb==2.4.10
-tensorflow==2.7.0
+tensorflow==2.7.1
